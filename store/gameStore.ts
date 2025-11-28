@@ -38,6 +38,10 @@ export const useGameStore = create<GameStore>((set, get, api) => ({
 
     // Common Actions
     addLog: (message, type = 'info') => {
-        set(state => ({ logs: [...(state.logs || []), { message, type, timestamp: Date.now() }] }));
+        set(state => {
+            const logs = [...(state.logs || []), { message, type, timestamp: Date.now() }];
+            // Mantener máximo 1000 logs para evitar memory leaks
+            return { logs: logs.slice(-1000) };
+        });
     }
 }));

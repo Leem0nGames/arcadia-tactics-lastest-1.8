@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, Suspense, useState } from 'react';
+import React, { useEffect, useMemo, Suspense, useState, useCallback } from 'react';
 import { GameState, PositionComponent, BattleAction, Dimension, TerrainType } from './types';
 import { OverworldMap } from './components/OverworldMap';
 import { BattleScene } from './components/BattleScene';
@@ -51,8 +51,12 @@ const App = () => {
       
       // Optimization: Create obstacle map for O(1) lookup
       const obstacleMap = new Set<string>();
+      const occupiedMap = new Set<string>();
       battleMap.forEach(cell => {
           if (cell.isObstacle) obstacleMap.add(`${cell.x},${cell.z}`);
+      });
+      battleEntities.forEach(e => {
+          if (e.id !== activeEntity.id) occupiedMap.add(`${e.position.x},${e.position.y}`);
       });
       
       while(queue.length > 0) {
@@ -66,10 +70,8 @@ const App = () => {
                for(const n of neighbors) {
                    if (n.x >= 0 && n.x < BATTLE_MAP_SIZE && n.y >= 0 && n.y < BATTLE_MAP_SIZE) {
                        const key = `${n.x},${n.y}`;
-                       const isObstacle = obstacleMap.has(key);
-                       const isOccupied = battleEntities.some(e => e.position.x === n.x && e.position.y === n.y && e.id !== activeEntity.id);
                        
-                       if (!visited.has(key) && !isObstacle && !isOccupied) {
+                       if (!visited.has(key) && !obstacleMap.has(key) && !occupiedMap.has(key)) {
                            visited.add(key);
                            queue.push({ x: n.x, y: n.y, dist: curr.dist + 1 });
                            moves.push({ x: n.x, y: n.y });
@@ -101,6 +103,9 @@ const App = () => {
         .map(e => ({ x: e.position.x, y: e.position.y }));
 
   }, [gameState, selectedAction, hasActed, battleEntities, activeEntity, store]);
+
+  // Memoizar battleEntities para evitar recálculos innecesarios
+  const memoizedBattleEntities = useMemo(() => battleEntities, [battleEntities]);
 
   if (isAdmin) {
       return <AdminDashboard />;

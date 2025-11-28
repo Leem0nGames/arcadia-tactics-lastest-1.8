@@ -1,6 +1,6 @@
 
-import React, { Suspense } from 'react';
-import { Canvas, ThreeElements } from '@react-three/fiber';
+import React, { Suspense, useEffect, useRef } from 'react';
+import { Canvas, ThreeElements, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, SpotLight } from '@react-three/drei';
 import { Entity, Dimension, WeatherType } from '../types';
 import { useGameStore } from '../store/gameStore';
@@ -18,11 +18,32 @@ import { BillboardUnit } from './battle/BillboardUnit';
 import { SpellEffectsRenderer } from './battle/SpellEffectsRenderer';
 import { LootDropVisual } from './battle/LootDropVisual';
 
-export const BattleScene = ({ entities, weather, currentTurnEntityId, onTileClick, validMoves, validTargets }: any) => {
+// Component to handle cleanup on unmount
+const CanvasCleanup = () => {
+    const { gl } = useThree();
+    useEffect(() => {
+        return () => {
+            gl.dispose();
+            gl.forceContextLoss();
+        };
+    }, [gl]);
+    return null;
+};
+
+const BattleSceneInner = ({ entities, weather, currentTurnEntityId, onTileClick, validMoves, validTargets }: any) => {
     const { battleMap, damagePopups, handleTileHover, dimension, hasActed, hasMoved, activeSpellEffect, lootDrops } = useGameStore();
     const isShadowRealm = dimension === Dimension.UPSIDE_DOWN;
     const activeEntity = entities.find((e: Entity) => e.id === currentTurnEntityId);
     const center = BATTLE_MAP_SIZE / 2;
+    const canvasKeyRef = useRef<string>(JSON.stringify(battleMap?.length || 0) + currentTurnEntityId);
+    
+    // Generar una key única para forzar remontaje del Canvas
+    const canvasKey = battleMap?.length ? `battle-${battleMap.length}-${currentTurnEntityId}` : 'empty-battle';
+    
+    // Debug log
+    if (!battleMap || battleMap.length === 0) {
+        console.warn('[BattleScene] battleMap is empty or undefined:', battleMap);
+    }
 
     return (
         <div className="w-full h-full bg-slate-950 relative overflow-hidden">
@@ -31,7 +52,8 @@ export const BattleScene = ({ entities, weather, currentTurnEntityId, onTileClic
             <div className="absolute top-0 left-0 right-0 h-32 z-10 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 100%)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }} />
             <div className="absolute bottom-0 left-0 right-0 h-32 z-10 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }} />
 
-            <Canvas shadows dpr={[1, 1.5]} camera={{ position: [center, 25, center + 45], fov: 35, near: 0.1, far: 1000 }}>
+            <Canvas key={canvasKey} shadows gl={{ toneMappingExposure: 0.8, toneMapping: 2, alpha: false, antialias: true, failIfMajorPerformanceCaveat: false }} dpr={[1, 1.5]} camera={{ position: [center, 25, center + 45], fov: 35, near: 0.1, far: 1000 }}>
+                <CanvasCleanup />
                 <FogController isShadowRealm={isShadowRealm} />
                 <CinematicCamera />
                 
@@ -47,21 +69,30 @@ export const BattleScene = ({ entities, weather, currentTurnEntityId, onTileClic
                     minPolarAngle={0.1} 
                 />
                 
-                <hemisphereLight color={isShadowRealm ? "#4c1d95" : "#ffffff"} groundColor={isShadowRealm ? "#000000" : "#1e293b"} intensity={isShadowRealm ? 0.3 : 0.6} />
-                <ambientLight intensity={isShadowRealm ? 0.2 : 0.5} color={isShadowRealm ? "#2e1065" : "#ffffff"} />
-                <directionalLight position={[10, 20, 5]} intensity={isShadowRealm ? 0.5 : 1.5} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0005} shadow-normalBias={0.04} />
+                <hemisphereLight color={isShadowRealm ? "#4c1d95" : "#ffffff"} groundColor={isShadowRealm ? "#000000" : "#1e293b"} intensity={isShadowRealm ? 0.2 : 0.3} />
+                <ambientLight intensity={isShadowRealm ? 0.15 : 0.25} color={isShadowRealm ? "#2e1065" : "#ffffff"} />
+                <directionalLight position={[10, 20, 5]} intensity={isShadowRealm ? 0.4 : 0.8} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0005} shadow-normalBias={0.04} />
 
                 {activeEntity && (
                     <SpotLight position={[activeEntity.position.x, 12, activeEntity.position.y]} target-position={[activeEntity.position.x, 0, activeEntity.position.y]} intensity={isShadowRealm ? 5 : 4} angle={0.6} penumbra={0.5} castShadow color={isShadowRealm ? "#a855f7" : "#ffedd5"} distance={30} attenuation={10} anglePower={5} />
                 )}
                 
-                <TerrainLayer mapData={battleMap} isShadowRealm={isShadowRealm} />
-                
-                <Suspense fallback={null}>
-                     <DecorationLayer mapData={battleMap} />
-                </Suspense>
-                
-                <InteractionLayer mapData={battleMap} validMoves={validMoves} validTargets={validTargets} onTileClick={onTileClick} onTileHover={handleTileHover} />
+                {battleMap && battleMap.length > 0 ? (
+                    <>
+                        <TerrainLayer mapData={battleMap} isShadowRealm={isShadowRealm} />
+                        
+                        <Suspense fallback={null}>
+                             <DecorationLayer mapData={battleMap} />
+                        </Suspense>
+                        
+                        <InteractionLayer mapData={battleMap} validMoves={validMoves} validTargets={validTargets} onTileClick={onTileClick} onTileHover={handleTileHover} />
+                    </>
+                ) : (
+                    <mesh position={[center, 0, center]}>
+                        <planeGeometry args={[100, 100]} />
+                        <meshStandardMaterial color="#1a1a2e" />
+                    </mesh>
+                )}
                 
                 <Suspense fallback={null}>
                      <SpellEffectsRenderer activeSpellEffect={activeSpellEffect} />
@@ -102,3 +133,13 @@ export const BattleScene = ({ entities, weather, currentTurnEntityId, onTileClic
         </div>
     );
 };
+
+export const BattleScene = React.memo(BattleSceneInner, (prevProps, nextProps) => {
+    return (
+        prevProps.entities === nextProps.entities &&
+        prevProps.weather === nextProps.weather &&
+        prevProps.currentTurnEntityId === nextProps.currentTurnEntityId &&
+        prevProps.validMoves === nextProps.validMoves &&
+        prevProps.validTargets === nextProps.validTargets
+    );
+});

@@ -27,7 +27,7 @@ const SpriteComponent = ({ url }: { url: string }) => {
             </mesh>
             <mesh>
                 <planeGeometry args={[2, 2]} />
-                <meshStandardMaterial map={texture} transparent alphaTest={0.5} color={'white'} side={THREE.DoubleSide} roughness={0.8} />
+                <meshStandardMaterial map={texture} transparent alphaTest={0.5} color={'#d0d0d0'} side={THREE.DoubleSide} roughness={0.8} emissive="#000000" emissiveIntensity={0} />
             </mesh>
         </group>
     )
@@ -56,7 +56,7 @@ export const BillboardUnit = React.memo(({ position, color, spriteUrl, isCurrent
         {isCurrentTurn && (
              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
                 <ringGeometry args={[0.4, 0.45, 32]} />
-                <meshBasicMaterial color={color} transparent opacity={0.8} toneMapped={false} side={THREE.DoubleSide} />
+                <meshBasicMaterial color={color} transparent opacity={0.6} side={THREE.DoubleSide} />
             </mesh>
         )}
         
@@ -79,7 +79,7 @@ export const BillboardUnit = React.memo(({ position, color, spriteUrl, isCurrent
                 {hpPercent > 0 && (
                     <mesh position={[-0.5 + (1.0 * hpPercent) / 2, 0, 0]}>
                         <planeGeometry args={[1.0 * hpPercent, 0.1]} />
-                        <meshBasicMaterial color={hpPercent > 0.5 ? "#22c55e" : "#ef4444"} toneMapped={false} />
+                        <meshBasicMaterial color={hpPercent > 0.5 ? "#22c55e" : "#ef4444"} />
                     </mesh>
                 )}
             </Billboard>
