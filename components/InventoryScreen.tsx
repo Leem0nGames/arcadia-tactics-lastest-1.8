@@ -6,7 +6,7 @@ import { RARITY_COLORS } from '../constants';
 import { getModifier } from '../services/dndRules';
 
 // --- STYLED COMPONENTS HELPERS ---
-const RarityBorder = ({ rarity, children, className = "" }: { rarity: ItemRarity, children: any, className?: string }) => {
+const RarityBorder = ({ rarity, children, className = "" }: { rarity: ItemRarity, children: React.ReactNode, className?: string }) => {
     const color = RARITY_COLORS[rarity];
     return (
         <div 

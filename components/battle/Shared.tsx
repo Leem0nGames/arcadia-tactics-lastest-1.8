@@ -6,7 +6,7 @@ import { ThreeElements } from '@react-three/fiber';
 interface ErrorBoundaryProps {
   fallback: React.ReactNode;
   children?: React.ReactNode;
-  key?: any;
+  key?: string | number;
 }
 
 interface ErrorBoundaryState {
@@ -23,9 +23,9 @@ export class TextureErrorBoundary extends React.Component<ErrorBoundaryProps, Er
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(_error: any): ErrorBoundaryState { return { hasError: true }; }
+  static getDerivedStateFromError(_error: Error): ErrorBoundaryState { return { hasError: true }; }
   
-  componentDidCatch(error: any, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // console.warn("Texture load failed", error);
   }
 

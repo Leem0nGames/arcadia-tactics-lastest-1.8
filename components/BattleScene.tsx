@@ -30,7 +30,7 @@ const CanvasCleanup = () => {
     return null;
 };
 
-const BattleSceneInner = ({ entities, weather, currentTurnEntityId, onTileClick, validMoves, validTargets }: any) => {
+const BattleSceneInner = ({ entities, weather, currentTurnEntityId, onTileClick, validMoves, validTargets }: { entities: (Entity & { stats: CombatStatsComponent, position: PositionComponent, visual: VisualComponent })[], weather: WeatherType, currentTurnEntityId: string | null, onTileClick: (x: number, z: number) => void, validMoves: PositionComponent[], validTargets: PositionComponent[] }) => {
     const { battleMap, damagePopups, handleTileHover, dimension, hasActed, hasMoved, activeSpellEffect, lootDrops } = useGameStore();
     const isShadowRealm = dimension === Dimension.UPSIDE_DOWN;
     const activeEntity = entities.find((e: Entity) => e.id === currentTurnEntityId);
@@ -102,7 +102,7 @@ const BattleSceneInner = ({ entities, weather, currentTurnEntityId, onTileClick,
                     <LootDropVisual key={drop.id} drop={drop} />
                 ))}
 
-                {entities.map((ent: any) => {
+                {entities.map((ent: Entity & { stats: CombatStatsComponent, position: PositionComponent, visual: VisualComponent }) => {
                     const isTurn = ent.id === currentTurnEntityId;
                     const isActivePlayer = isTurn && ent.type === 'PLAYER';
                     return (
@@ -122,7 +122,7 @@ const BattleSceneInner = ({ entities, weather, currentTurnEntityId, onTileClick,
                     );
                 })}
 
-                {damagePopups.map((p: any) => (
+                {damagePopups.map((p: DamagePopup) => (
                     <Html key={p.id} position={[p.position[0], p.position[2] + 2, p.position[1]]} center zIndexRange={[100, 0]}>
                         <div className={`font-serif font-bold text-2xl drop-shadow-md ${p.isCrit ? 'text-amber-300 text-3xl' : 'text-white'}`} style={{ textShadow: '0 0 4px black' }}>{p.amount}</div>
                     </Html>

@@ -6,17 +6,27 @@ import { BattleScene } from './components/BattleScene';
 import { CharacterCreation } from './components/CharacterCreation';
 import { UIOverlay } from './components/UIOverlay';
 import { BattleResultModal } from './components/BattleResultModal';
+import { LevelUpNotification } from './components/LevelUpNotification';
 import { useGameStore } from './store/gameStore';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import MainMenu from './components/MainMenu';
 import { BATTLE_MAP_SIZE } from './constants';
 
 const App = () => {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [levelUpNotifications, setLevelUpNotifications] = useState<Array<{
+    character: Entity;
+    oldStats: CombatStatsComponent;
+    newStats: CombatStatsComponent;
+    id: string;
+  }>>([]);
+  const [previousPartyStats, setPreviousPartyStats] = useState<Partial<Record<string, CombatStatsComponent>> | null>(null);
+  
   const store = useGameStore();
   const { 
     gameState, playerPos, battleEntities, turnOrder, currentTurnIndex,
     battleTerrain, battleWeather, battleRewards, selectedAction, hasMoved, hasActed, dimension, townMapData,
-    mapDimensions, battleMap
+    mapDimensions, battleMap, party
   } = store;
 
   // Routing Check
@@ -32,6 +42,54 @@ const App = () => {
           store.initializeWorld();
       }
   }, [isAdmin]);
+
+  // Auto-save: every 5 minutes while in OVERWORLD or BATTLE_TACTICAL
+  useEffect(() => {
+    const SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    let tid: number | null = null;
+    if (store && (gameState === GameState.OVERWORLD || gameState === GameState.BATTLE_TACTICAL)) {
+      try {
+        // initial quick save when entering state
+        store.saveGame?.();
+      } catch (e) {}
+      tid = window.setInterval(() => {
+        try {
+          store.saveGame?.();
+          store.addLog('Auto-saved.', 'info');
+        } catch (e) {
+          console.error('Auto-save failed', e);
+        }
+      }, SAVE_INTERVAL_MS);
+    }
+    return () => { if (tid) clearInterval(tid); };
+  }, [gameState, store]);
+
+  // Detect Level Ups
+  useEffect(() => {
+    if (!previousPartyStats || !party) {
+      setPreviousPartyStats(party?.map(m => ({ ...m.stats })));
+      return;
+    }
+
+    const newLevelUps: any[] = [];
+    party.forEach((member, idx) => {
+      const prevMember = previousPartyStats?.[idx];
+      if (prevMember && member.stats.level > prevMember.level) {
+        newLevelUps.push({
+          character: member,
+          oldStats: prevMember,
+          newStats: member.stats,
+          id: `levelup-${member.id}-${Date.now()}`,
+        });
+      }
+    });
+
+    if (newLevelUps.length > 0) {
+      setLevelUpNotifications(prev => [...prev, ...newLevelUps]);
+    }
+
+    setPreviousPartyStats(party?.map(m => ({ ...m.stats })));
+  }, [party]);
 
   // --- Calculation Helpers ---
   const activeEntityId = turnOrder[currentTurnIndex];
@@ -107,9 +165,9 @@ const App = () => {
   // Memoizar battleEntities para evitar recálculos innecesarios
   const memoizedBattleEntities = useMemo(() => battleEntities, [battleEntities]);
 
-  if (isAdmin) {
+    if (isAdmin) {
       return <AdminDashboard />;
-  }
+    }
 
   // Robust fallback for dimensions to prevent crash if store is hydrating
   const safeDimensions = mapDimensions || { width: 20, height: 15 };
@@ -118,7 +176,12 @@ const App = () => {
     <div className="w-screen h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans relative">
       
       {gameState === GameState.CHARACTER_CREATION && (
-          <CharacterCreation onComplete={store.createCharacter} />
+          // If no party exists yet, show MainMenu (Continue/New Game). Otherwise show CharacterCreation for rerolls.
+          (party && party.length > 0) ? (
+            <CharacterCreation onComplete={store.createCharacter} />
+          ) : (
+            <MainMenu />
+          )
       )}
 
       {(gameState === GameState.OVERWORLD || gameState === GameState.TOWN_EXPLORATION) && (
@@ -161,6 +224,17 @@ const App = () => {
             )}
           </>
       )}
+
+      {/* Level Up Notifications */}
+      {levelUpNotifications.map(notification => (
+        <LevelUpNotification
+          key={notification.id}
+          character={notification.character}
+          oldStats={notification.oldStats}
+          newStats={notification.newStats}
+          onDismiss={() => setLevelUpNotifications(prev => prev.filter(n => n.id !== notification.id))}
+        />
+      ))}
     </div>
   );
 };

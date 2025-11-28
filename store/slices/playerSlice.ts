@@ -126,7 +126,7 @@ export const createPlayerSlice: StateCreator<GameStore, [], [], PlayerSlice> = (
   recalculateStats: (entity) => {
     const effectiveAttributes = { ...entity.stats.baseAttributes };
     let armorBase = 10; let shieldBonus = 0;
-    Object.values(entity.equipment).forEach((item: any) => {
+    Object.values(entity.equipment).forEach((item: Item | undefined) => {
         if (!item || !item.equipmentStats) return;
         const stats = item.equipmentStats;
         if (stats.modifiers) Object.entries(stats.modifiers).forEach(([key, val]) => { if (val) effectiveAttributes[key as keyof Attributes] += (val as number); });

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:save": "node tools/test_save.mjs"
+    ,"test:loot": "node tools/test_loot.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

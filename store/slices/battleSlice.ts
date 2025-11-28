@@ -16,7 +16,7 @@ export interface BattleSlice {
   currentTurnIndex: number;
   battleTerrain: TerrainType;
   battleWeather: WeatherType;
-  battleRewards: { xp: number, gold: number, items: any[] };
+  battleRewards: { xp: number, gold: number, items: Item[] };
   battleMap: BattleCell[];
   lootDrops: LootDrop[];
   selectedAction: BattleAction | null;
@@ -78,51 +78,45 @@ const generateBattleGrid = (terrainType: TerrainType): BattleCell[] => {
     return grid;
 };
 
-const getUnitHeight = (entity: any, map: BattleCell[]) => { const cell = map.find(c => c.x === entity.position.x && c.z === entity.position.y); return cell ? (cell.offsetY || 0) + cell.height : 1; };
+const getUnitHeight = (entity: Entity & { stats: CombatStatsComponent, position: PositionComponent }, map: BattleCell[]) => { const cell = map.find(c => c.x === entity.position.x && c.z === entity.position.y); return cell ? (cell.offsetY || 0) + cell.height : 1; };
 
 const applyDamage = (store: GameStore, targetId: string, amount: number, isCrit = false) => {
-    const target = store.battleEntities.find((e: any) => e.id === targetId);
+    const target = store.battleEntities.find((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.id === targetId);
     if (!target) return;
     
     const newPopups = [...store.damagePopups, { id: generateId(), position: [target.position.x, 0, target.position.y], amount: isCrit ? `${amount}!` : amount, color: isCrit ? '#fbbf24' : '#ef4444', isCrit, timestamp: Date.now() }];
-    const newEntities = store.battleEntities.map((e: any) => e.id === targetId ? { ...e, stats: { ...e.stats, hp: Math.max(0, e.stats.hp - amount) } } : e);
+    const newEntities = store.battleEntities.map((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.id === targetId ? { ...e, stats: { ...e.stats, hp: Math.max(0, e.stats.hp - amount) } } : e);
     
     let nextState = { ...store, gameState: store.gameState, lootDrops: store.lootDrops || [], battleRewards: store.battleRewards };
     
-    if (newEntities.find((e: any) => e.id === targetId)?.stats.hp === 0) {
+    if (newEntities.find((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.id === targetId)?.stats.hp === 0) {
         store.addLog(`${target.name} defeated!`, "narrative");
         
-        if (target.type === 'ENEMY') {
-            const dropChance = 0.3; // 30% base drop rate
-            if (Math.random() < dropChance) {
-                const diffSettings = DIFFICULTY_SETTINGS[store.difficulty];
-                const goldAmount = Math.floor((Math.random() * 15 + 5) * diffSettings.goldMod);
-                
-                let droppedItems: Item[] = [];
-                // Higher difficulty = better loot chance
-                if (Math.random() > (1.0 - (0.1 * diffSettings.xpMod))) { 
-                    const allItems = Object.values(ITEMS);
-                    droppedItems.push(allItems[Math.floor(Math.random() * allItems.length)]); 
+            if (target.type === 'ENEMY') {
+            // Use scaled loot tables to generate items and gold
+            try {
+                const avgPartyLevel = Math.max(1, Math.floor(store.party.reduce((sum, p) => sum + p.stats.level, 0) / Math.max(1, store.party.length)));
+                const { dropLoot } = await import('../../services/lootTables');
+                const loot = dropLoot(store.battleTerrain, avgPartyLevel, store.difficulty);
+                if (loot.items.length > 0 || loot.gold > 0) {
+                    const newDrop: LootDrop = { id: generateId(), position: { ...target.position }, gold: loot.gold, items: loot.items, rarity: loot.rarity };
+                    nextState.lootDrops = [...nextState.lootDrops, newDrop];
+                    store.addLog('A loot bag drops to the ground.', 'loot');
                 }
-                
-                let maxRarity = ItemRarity.COMMON;
-                droppedItems.forEach(i => { if (i.rarity === ItemRarity.LEGENDARY) maxRarity = ItemRarity.LEGENDARY; else if (i.rarity === ItemRarity.VERY_RARE && maxRarity !== ItemRarity.LEGENDARY) maxRarity = ItemRarity.VERY_RARE; else if (i.rarity === ItemRarity.RARE && maxRarity !== ItemRarity.VERY_RARE) maxRarity = ItemRarity.RARE; });
-                
-                const newDrop: LootDrop = { id: generateId(), position: { ...target.position }, gold: goldAmount, items: droppedItems, rarity: maxRarity };
-                nextState.lootDrops = [...nextState.lootDrops, newDrop];
-                store.addLog("A loot bag drops to the ground.", "loot");
+            } catch (e) {
+                console.error('Loot generation failed', e);
             }
         }
 
         // VICTORY CHECK
-        if (!newEntities.some((e: any) => e.type === 'ENEMY' && e.stats.hp > 0)) {
+        if (!newEntities.some((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.type === 'ENEMY' && e.stats.hp > 0)) {
              const allGold = nextState.lootDrops.reduce((sum: number, drop: LootDrop) => sum + drop.gold, nextState.battleRewards.gold);
              const allItems = nextState.lootDrops.reduce((list: Item[], drop: LootDrop) => [...list, ...drop.items], nextState.battleRewards.items);
              
              nextState.battleRewards = { ...nextState.battleRewards, gold: allGold, items: allItems };
              nextState.lootDrops = []; 
              setTimeout(() => store.setGameState(GameState.BATTLE_VICTORY), 1500);
-        } else if (!newEntities.some((e: any) => e.type === 'PLAYER' && e.stats.hp > 0)) { 
+        } else if (!newEntities.some((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.type === 'PLAYER' && e.stats.hp > 0)) { 
              setTimeout(() => store.setGameState(GameState.BATTLE_DEFEAT), 1500); 
         }
     }
@@ -132,74 +126,151 @@ const applyDamage = (store: GameStore, targetId: string, amount: number, isCrit 
 
 const STAT_COSTS = { ATTACK: 3, RUN: 5, MAGIC: 2, LOOT: 2 };
 
-const performEnemyAction = (store: GameStore, enemy: Entity & { stats: CombatStatsComponent, position: PositionComponent }, targets: any[], set: any) => {
+const performEnemyAction = (store: GameStore, enemy: Entity & { stats: CombatStatsComponent, position: PositionComponent }, targets: (Entity & { stats: CombatStatsComponent, position: PositionComponent })[], set: (state: Partial<BattleSlice>) => void) => {
     const aiBehavior = enemy.aiBehavior || AIBehavior.BASIC_MELEE;
-    let target = targets[0]; 
-    let minDist = 999;
-    
-    targets.forEach(p => { 
-        const d = Math.abs(enemy.position.x - p.position.x) + Math.abs(enemy.position.y - p.position.y); 
-        if (d < minDist) { minDist = d; target = p; } 
+    let newState = {};
+
+    // --- TACTICAL DECISIONS ---
+    // 1. Check if low HP → Flee or Heal
+    const hpPercent = enemy.stats.hp / enemy.stats.maxHp;
+    if (hpPercent < 0.25 && aiBehavior === AIBehavior.SPELLCASTER && enemy.stats.spellSlots.current > 0) {
+        // Try to heal self or retreat
+        store.addLog(`${enemy.name} casts Cure Wounds on self!`, "combat");
+        sfx.playMagic();
+        
+        const healAmount = rollDice(8, 1) + 3; // 1d8 + 3
+        const newEntities = store.battleEntities.map((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => 
+            e.id === enemy.id 
+                ? { ...e, stats: { ...e.stats, hp: Math.min(e.stats.maxHp, e.stats.hp + healAmount), spellSlots: { ...e.stats.spellSlots, current: e.stats.spellSlots.current - 1 } } } 
+                : e
+        );
+        return { battleEntities: newEntities };
+    }
+
+    // 2. Smart Target Selection: Pick the most damaged player or highest threat
+    let target = targets[0];
+    let bestScore = -999;
+    targets.forEach(p => {
+        const dmgTaken = p.stats.maxHp - p.stats.hp;
+        const threat = dmgTaken + (p.stats.ac < 12 ? 5 : 0); // Prioritize low AC
+        if (threat > bestScore) {
+            bestScore = threat;
+            target = p;
+        }
     });
 
     const dist = Math.abs(enemy.position.x - target.position.x) + Math.abs(enemy.position.y - target.position.y);
-    let newState = {};
 
-    // 1. SPELLCASTER LOGIC
-    if (aiBehavior === AIBehavior.SPELLCASTER) {
-        if (dist > 1 && dist <= 6 && enemy.stats.spellSlots.current > 0) {
-            store.addLog(`${enemy.name} casts Dark Bolt!`, "combat"); sfx.playMagic();
+    // --- SPELL CASTING (Multiple spells per behavior) ---
+    if (aiBehavior === AIBehavior.SPELLCASTER && enemy.stats.spellSlots.current > 0) {
+        // Spell selection: Damage if enemy far, Heal if ally hurt, Buff if needed
+        const allyHurt = store.battleEntities.find((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.type === 'ENEMY' && e.stats.hp < e.stats.maxHp * 0.5 && e.id !== enemy.id);
+        
+        let spellName = 'Fire Bolt';
+        let dmg = rollDice(10, 1) + 2;
+        let spellColor = '#ef4444';
+        let projectile = ASSETS.PROJECTILES.FIREBALL;
+
+        if (dist > 6) {
+            // Out of range, move closer
+        } else if (dist > 1 && enemy.stats.spellSlots.current > 0) {
+            // Choose spell based on situation
+            if (allyHurt && Math.random() > 0.6) {
+                spellName = 'Cure Wounds';
+                const healTarget = allyHurt;
+                store.addLog(`${enemy.name} casts ${spellName}!`, "combat");
+                sfx.playMagic();
+                
+                const healAmount = rollDice(8, 1) + 3;
+                const newEntities = store.battleEntities.map((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) =>
+                    e.id === allyHurt.id
+                        ? { ...e, stats: { ...e.stats, hp: Math.min(e.stats.maxHp, e.stats.hp + healAmount) } }
+                        : (e.id === enemy.id ? { ...e, stats: { ...e.stats, spellSlots: { ...e.stats.spellSlots, current: e.stats.spellSlots.current - 1 } } } : e)
+                );
+                return { battleEntities: newEntities };
+            } else if (target.stats.hp > 20 && Math.random() > 0.7) {
+                spellName = 'Fireball';
+                dmg = rollDice(8, 3) + 2; // 3d8 + 2
+                spellColor = '#f97316';
+                projectile = ASSETS.PROJECTILES.FIREBALL;
+            } else {
+                spellName = 'Magic Missile';
+                dmg = rollDice(4, 3) + 1; // 3d4 + 1
+                spellColor = '#06b6d4';
+                projectile = ASSETS.PROJECTILES.MAGIC_MISSILE;
+            }
+
+            store.addLog(`${enemy.name} casts ${spellName}!`, "combat");
+            sfx.playMagic();
             
-            const effect: SpellEffectData = { id: generateId(), type: 'PROJECTILE', startPos: [enemy.position.x, 1.5, enemy.position.y], endPos: [target.position.x, 1.0, target.position.y], color: '#7e22ce', duration: 800, timestamp: Date.now(), projectileSprite: ASSETS.PROJECTILES.NECRO_BOLT };
-            set({ activeSpellEffect: effect }); 
+            const effect: SpellEffectData = {
+                id: generateId(),
+                type: 'PROJECTILE',
+                startPos: [enemy.position.x, 1.5, enemy.position.y],
+                endPos: [target.position.x, 1.0, target.position.y],
+                color: spellColor,
+                duration: 800,
+                timestamp: Date.now(),
+                projectileSprite: projectile
+            };
+            set({ activeSpellEffect: effect });
             setTimeout(() => set({ activeSpellEffect: null }), 1000);
-            
-            let updatedEntities = store.battleEntities.map((e:any) => e.id === enemy.id ? { ...e, stats: { ...e.stats, spellSlots: { ...e.stats.spellSlots, current: e.stats.spellSlots.current - 1 } } } : e);
-            
-            // Spell Attack Roll (Assuming +5 mod for now, should be calc'd)
+
+            let updatedEntities = store.battleEntities.map((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) =>
+                e.id === enemy.id
+                    ? { ...e, stats: { ...e.stats, spellSlots: { ...e.stats.spellSlots, current: e.stats.spellSlots.current - 1 } } }
+                    : e
+            );
+
             const roll = rollD20();
-            if (roll.result + 5 >= target.stats.ac) { 
-                const dmg = rollDice(10, 1) + 2; // 1d10 + 2
-                const res = applyDamage({ ...store, battleEntities: updatedEntities }, target.id, dmg); 
-                if (res) newState = res; else newState = { battleEntities: updatedEntities }; 
-            } else { 
-                store.addLog("Spell fizzled.", "combat"); 
-                newState = { battleEntities: updatedEntities }; 
+            if (roll.result + 5 >= target.stats.ac) {
+                const res = applyDamage({ ...store, battleEntities: updatedEntities }, target.id, dmg);
+                if (res) newState = res;
+                else newState = { battleEntities: updatedEntities };
+            } else {
+                store.addLog("Spell fizzled.", "combat");
+                newState = { battleEntities: updatedEntities };
             }
             return newState;
         }
     }
 
-    // 2. MELEE LOGIC (Used by all if close, or Beasts)
+    // --- MELEE LOGIC ---
     if (dist <= 1) {
         sfx.playAttack();
-        // Use new D&D Logic for Hit
-        // Enemy 'Weapon' is abstract here, assume Main Hand exists or use simplified stats
-        // Simplified Enemy Attack: d20 + Proficiency(2) + StrMod(approx 2) ~ +4
         const hitRoll = rollD20();
         const hitMod = 4; // Basic enemy mod
         
         if (hitRoll.result === 20 || (hitRoll.result + hitMod) >= target.stats.ac) {
             const isCrit = hitRoll.result === 20;
-            let dmg = rollDice(6, 1) + 2; // 1d6+2 base
+            let dmg = rollDice(6, 1) + 2;
             if (isCrit) dmg += rollDice(6, 1);
             
-            store.addLog(`${enemy.name} hits ${target.name} for ${dmg}.`, "combat"); 
-            sfx.playHit(); 
+            store.addLog(`${enemy.name} hits ${target.name} for ${dmg}.`, "combat");
+            sfx.playHit();
             const res = applyDamage(store, target.id, dmg, isCrit);
             if (res) newState = res;
-        } else { 
-            store.addLog("Enemy Miss.", "combat"); 
+        } else {
+            store.addLog("Enemy Miss.", "combat");
             const popups = [...store.damagePopups, { id: generateId(), position: [target.position.x, 0, target.position.y], amount: "MISS", color: '#94a3b8', isCrit: false, timestamp: Date.now() }];
             newState = { damagePopups: popups };
         }
-    } else {
-        // Chase
+    } else if (dist > 1 && dist <= 6) {
+        // --- RANGED CHASE (Get closer if within range but not adjacent) ---
         const path = findBattlePath({x: enemy.position.x, y: enemy.position.y}, {x: target.position.x, y: target.position.y}, store.battleMap);
         if (path && path.length > 0) {
             sfx.playStep();
             const step = path[0];
-            const updatedEntities = store.battleEntities.map((e:any) => e.id === enemy.id ? { ...e, position: { x: step.x, y: step.z } } : e);
+            const updatedEntities = store.battleEntities.map((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.id === enemy.id ? { ...e, position: { x: step.x, y: step.z } } : e);
+            newState = { battleEntities: updatedEntities };
+        }
+    } else {
+        // --- LONG RANGE CHASE ---
+        const path = findBattlePath({x: enemy.position.x, y: enemy.position.y}, {x: target.position.x, y: target.position.y}, store.battleMap);
+        if (path && path.length > 0) {
+            sfx.playStep();
+            const step = path[0];
+            const updatedEntities = store.battleEntities.map((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => e.id === enemy.id ? { ...e, position: { x: step.x, y: step.z } } : e);
             newState = { battleEntities: updatedEntities };
         }
     }
@@ -252,7 +323,7 @@ export const createBattleSlice: StateCreator<GameStore, [], [], BattleSlice> = (
       const getPlayerSpawn = (i: number) => { const baseX = Math.floor(BATTLE_MAP_SIZE / 2); const baseZ = BATTLE_MAP_SIZE - 3; if (i === 0) return { x: baseX, y: baseZ }; if (i === 1) return { x: baseX - 2, y: baseZ + 1 }; if (i === 2) return { x: baseX + 2, y: baseZ + 1 }; return { x: baseX, y: baseZ + 2 }; };
       
       const battleMap = generateBattleGrid(terrain);
-      const battleEntities: any[] = [];
+      const battleEntities: (Entity & { stats: CombatStatsComponent, position: PositionComponent, visual: VisualComponent })[] = [];
       
       // Players
       party.forEach((member, i) => { 
@@ -400,7 +471,7 @@ export const createBattleSlice: StateCreator<GameStore, [], [], BattleSlice> = (
                         set(s => ({ battleEntities: s.battleEntities.map(e => { let ent = { ...e }; if (e.id === activeId) ent.stats = { ...ent.stats, spellSlots: newSpellSlots }; if (e.id === targetEnt.id) ent.stats = { ...ent.stats, hp: Math.min(ent.stats.maxHp, ent.stats.hp + amount) }; return ent; }), hasActed: true, selectedAction: null, damagePopups: popups, selectedSpell: null }));
                    } else {
                        const res = applyDamage(get(), targetEnt.id, amount);
-                       if (res) { const updatedEntities = res.battleEntities.map((e: any) => { if (e.id === activeId) return { ...e, stats: { ...e.stats, spellSlots: newSpellSlots } }; return e; }); set({ ...res, battleEntities: updatedEntities }); }
+                       if (res) { const updatedEntities = res.battleEntities.map((e: Entity & { stats: CombatStatsComponent, position: PositionComponent }) => { if (e.id === activeId) return { ...e, stats: { ...e.stats, spellSlots: newSpellSlots } }; return e; }); set({ ...res, battleEntities: updatedEntities }); }
                        set({ hasActed: true, selectedAction: null, selectedSpell: null });
                    }
                    set({ isActionAnimating: false });
@@ -451,7 +522,28 @@ export const createBattleSlice: StateCreator<GameStore, [], [], BattleSlice> = (
   nextTurn: () => { const state = get(); if (state.gameState !== GameState.BATTLE_TACTICAL) return; let nextIdx = (state.currentTurnIndex + 1) % state.turnOrder.length; let nextEntity = state.battleEntities.find(e => e.id === state.turnOrder[nextIdx]); if (!nextEntity || nextEntity.stats.hp <= 0) { for(let i=0; i<10; i++) { nextIdx = (nextIdx + 1) % state.turnOrder.length; nextEntity = state.battleEntities.find(e => e.id === state.turnOrder[nextIdx]); if (nextEntity && nextEntity.stats.hp > 0) break; } } if (!nextEntity) return; const REGEN_FLAT = 2; const maxStamina = nextEntity.stats.maxStamina || 10; const currentStamina = nextEntity.stats.stamina || 0; const regenAmount = Math.floor(maxStamina * 0.1) + REGEN_FLAT; const newStamina = Math.min(maxStamina, currentStamina + regenAmount); let newPopups = state.damagePopups; if (nextEntity.type === 'PLAYER' && newStamina > currentStamina) { const recovered = newStamina - currentStamina; newPopups = [...state.damagePopups, { id: generateId(), position: [nextEntity.position.x, 0, nextEntity.position.y], amount: `+${recovered} ⚡`, color: '#facc15', isCrit: false, timestamp: Date.now() }]; } const updatedEntities = state.battleEntities.map(e => e.id === nextEntity!.id ? { ...e, stats: { ...e.stats, stamina: newStamina } } : e); set({ battleEntities: updatedEntities, currentTurnIndex: nextIdx, selectedTile: null, hasMoved: false, hasActed: false, selectedAction: nextEntity.type === 'PLAYER' ? BattleAction.MOVE : null, selectedSpell: null, hoveredEntity: null, activeSpellEffect: null, damagePopups: newPopups }); if (nextEntity.type === 'PLAYER') { get().addLog(`${nextEntity.name}'s turn.`, "info"); } else { setTimeout(() => { const currentState = get(); if (currentState.gameState !== GameState.BATTLE_TACTICAL) return; const me = currentState.battleEntities.find(e => e.id === nextEntity!.id); const targets = currentState.battleEntities.filter(e => e.type === 'PLAYER' && e.stats.hp > 0); if (!me || me.stats.hp <= 0 || targets.length === 0) { currentState.nextTurn(); return; } const updates = performEnemyAction(currentState, me, targets, set); if (updates) set(updates); setTimeout(() => get().nextTurn(), 1000); }, 800); } },
   attemptRun: () => { const state = get(); const activeId = state.turnOrder[state.currentTurnIndex]; const activeEntity = state.battleEntities.find(e => e.id === activeId); if (activeEntity && activeEntity.stats.stamina < STAT_COSTS.RUN) { state.addLog("Too exhausted!", "combat"); return; } if (activeEntity) { const newStamina = activeEntity.stats.stamina - STAT_COSTS.RUN; set(s => ({ battleEntities: s.battleEntities.map(e => e.id === activeId ? { ...e, stats: { ...e.stats, stamina: newStamina } } : e) })); } const hpFactor = (activeEntity?.stats.hp || 1) / (activeEntity?.stats.maxHp || 1); const escapeChance = Math.min(0.95, Math.max(0.2, 0.5 + (hpFactor * 0.2))); if (Math.random() < escapeChance) { get().addLog("Escaped!", "narrative"); set({ gameState: GameState.OVERWORLD, damagePopups: [], gracePeriodEndTime: Date.now() + 5000 }); } else { get().addLog("Failed escape!", "combat"); get().nextTurn(); } },
   restartBattle: () => { sfx.playUiClick(); get().startBattle(get().battleTerrain, get().battleWeather); },
-  continueAfterVictory: () => { sfx.playUiClick(); const { party, battleRewards, inventory } = get(); const newParty = party.map(m => m.stats.hp <= 0 ? m : { ...m, stats: { ...m.stats, xp: m.stats.xp + battleRewards.xp } }); const newInventory = [...inventory]; battleRewards.items.forEach(item => { const existingSlot = newInventory.find(s => s.item.id === item.id); if (existingSlot) existingSlot.quantity++; else newInventory.push({ item, quantity: 1 }); }); set({ party: newParty, gameState: GameState.OVERWORLD, damagePopups: [], gracePeriodEndTime: Date.now() + 3000, inventory: newInventory, lootDrops: [] }); },
+  continueAfterVictory: () => { 
+    sfx.playUiClick(); 
+    const { party, battleRewards, inventory } = get(); 
+    const newParty = party.map(m => m.stats.hp <= 0 ? m : { ...m, stats: { ...m.stats, xp: m.stats.xp + battleRewards.xp } }); 
+    const newInventory = [...inventory]; 
+    battleRewards.items.forEach(item => { 
+      const existingSlot = newInventory.find(s => s.item.id === item.id); 
+      if (existingSlot) existingSlot.quantity++; 
+      else newInventory.push({ item, quantity: 1 }); 
+    }); 
+    set({ party: newParty, gameState: GameState.OVERWORLD, damagePopups: [], gracePeriodEndTime: Date.now() + 3000, inventory: newInventory, lootDrops: [] });
+    
+    // ✅ NEW: Check for level ups and trigger level up party
+    setTimeout(() => {
+      const currentState = get();
+      const leveledUpMembers = currentState.party.filter(m => m.stats.xp >= m.stats.xpToNextLevel);
+      if (leveledUpMembers.length > 0) {
+        get().levelUpParty();
+        get().addLog(`${leveledUpMembers.map(m => m.name).join(', ')} leveled up!`, 'levelup');
+      }
+    }, 500);
+  },
   hasLineOfSight: (source, target) => checkLineOfSight(source, target, get().battleMap),
   getAttackPrediction: () => null
 });

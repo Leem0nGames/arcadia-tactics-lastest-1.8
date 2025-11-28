@@ -8,7 +8,7 @@ import { BATTLE_MAP_SIZE } from '../../constants';
 
 const _tempObj = new THREE.Object3D();
 
-const InstancedOverlay = React.memo(({ points, color, mapData, scale = 0.8 }: any) => {
+const InstancedOverlay = React.memo(({ points, color, mapData, scale = 0.8 }: { points: PositionComponent[], color: string, mapData: BattleCell[], scale?: number }) => {
     const meshRef = useRef<THREE.InstancedMesh>(null);
     const count = points ? points.length : 0;
     useLayoutEffect(() => {

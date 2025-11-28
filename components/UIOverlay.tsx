@@ -275,13 +275,13 @@ export const UIOverlay: React.FC = () => {
   );
 };
 
-const CircleBtn = ({ onClick, icon }: any) => (
+const CircleBtn = ({ onClick, icon }: { onClick: () => void, icon: React.ReactNode }) => (
     <button onClick={onClick} className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-slate-900/80 border border-slate-600 text-slate-200 flex items-center justify-center hover:bg-slate-800 hover:text-white hover:border-amber-500 transition-all shadow-lg active:scale-90">
         {icon}
     </button>
 );
 
-const InteractionBtn = ({ onClick, icon, label, color }: any) => {
+const InteractionBtn = ({ onClick, icon, label, color }: { onClick: () => void, icon: React.ReactNode, label: string, color: string }) => {
     const bgClass = color === 'purple' ? 'bg-purple-600 hover:bg-purple-500 shadow-purple-500/40' : 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/40';
     return (
         <button onClick={onClick} className={`${bgClass} text-white px-5 py-2.5 rounded-full font-bold shadow-lg flex items-center gap-2 transition-transform hover:-translate-y-0.5 active:scale-95 mx-auto`}>
@@ -291,7 +291,7 @@ const InteractionBtn = ({ onClick, icon, label, color }: any) => {
     )
 };
 
-const StatusBar = ({ current, max, color, label }: any) => (
+const StatusBar = ({ current, max, color, label }: { current: number, max: number, color: string, label: string }) => (
     <div className="w-full bg-slate-950 h-2.5 rounded-full relative overflow-hidden border border-white/10">
         <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${Math.max(0, Math.min(100, (current / max) * 100))}%` }} />
         <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white/90 drop-shadow-md">
@@ -300,7 +300,7 @@ const StatusBar = ({ current, max, color, label }: any) => (
     </div>
 );
 
-const BigActionBtn = ({ label, icon, color, disabled, onClick, primary }: any) => (
+const BigActionBtn = ({ label, icon, color, disabled, onClick, primary }: { label: string, icon: React.ReactNode, color: string, disabled?: boolean, onClick: () => void, primary?: boolean }) => (
     <button 
         onClick={onClick}
         disabled={disabled}
@@ -318,7 +318,7 @@ const BigActionBtn = ({ label, icon, color, disabled, onClick, primary }: any) =
     </button>
 );
 
-const SmallActionBtn = ({ label, icon, onClick, disabled }: any) => (
+const SmallActionBtn = ({ label, icon, onClick, disabled }: { label: string, icon: React.ReactNode, onClick: () => void, disabled?: boolean }) => (
     <button 
         onClick={onClick}
         disabled={disabled}

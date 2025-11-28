@@ -16,10 +16,26 @@ const CURRENT_SAVE_VERSION = 3;
 interface SaveFile {
     version: number;
     timestamp: number;
-    data: any;
+    checksum?: string;
+    data: GameStateData;
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// Simple deterministic checksum (FNV-1a 32-bit) over JSON.stringify(data)
+const calculateChecksum = (obj: GameStateData): string => {
+    try {
+        const str = JSON.stringify(obj, Object.keys(obj).sort());
+        let hash = 2166136261 >>> 0;
+        for (let i = 0; i < str.length; i++) {
+            hash ^= str.charCodeAt(i);
+            hash = Math.imul(hash, 16777619) >>> 0;
+        }
+        return (hash >>> 0).toString(16);
+    } catch (e) {
+        return '';
+    }
+};
 
 export interface OverworldSlice {
   gameState: GameState;
@@ -140,7 +156,7 @@ export const createOverworldSlice: StateCreator<GameStore, [], [], OverworldSlic
         
         if (isAlreadyThere && isTileExplored) return;
 
-        let path: any[] | null = [];
+        let path: PositionComponent[] | null = [];
         
         if (gameState === GameState.TOWN_EXPLORATION && townMapData) {
             path = findPath({q: playerPos.x, r: playerPos.y}, {q, r}, townMapData);
@@ -387,11 +403,13 @@ export const createOverworldSlice: StateCreator<GameStore, [], [], OverworldSlic
             const saveFile: SaveFile = {
                 version: CURRENT_SAVE_VERSION,
                 timestamp: Date.now(),
-                data: saveData
+                data: saveData,
+                checksum: calculateChecksum(saveData)
             };
 
-            localStorage.setItem(SAVE_KEY, JSON.stringify(saveFile)); 
-            get().addLog("Game Saved Successfully.", "info"); 
+            // Persist with checksum
+            localStorage.setItem(SAVE_KEY, JSON.stringify(saveFile));
+            get().addLog("Game Saved Successfully.", "info");
         } catch (e) {
             console.error("Save Failed:", e);
             get().addLog("Failed to save game.", "combat");
@@ -406,10 +424,31 @@ export const createOverworldSlice: StateCreator<GameStore, [], [], OverworldSlic
                 return;
             }
 
-            let parsed: any = JSON.parse(str);
+            let parsed: SaveFile = JSON.parse(str);
+            // Backwards compatibility: older saves might not have version/checksum
             if (!parsed.version && parsed.party) {
                 parsed = { version: 0, data: parsed };
             }
+
+            // If the save contains a checksum, validate it
+            if (parsed.checksum) {
+                const expected = calculateChecksum(parsed.data);
+                if (!expected || expected !== parsed.checksum) {
+                    // Dev override: if developer wants to force-load a mismatched save,
+                    // set localStorage key `${SAVE_KEY}_force_load` = 'true' (ONLY FOR DEV TESTING)
+                    const forceKey = `${SAVE_KEY}_force_load`;
+                    const force = typeof localStorage !== 'undefined' && localStorage.getItem(forceKey) === 'true';
+                    console.warn('Save checksum mismatch.', { expected, actual: parsed.checksum, force });
+                    get().addLog('Save file failed integrity check.', 'combat');
+                    if (!force) {
+                        get().addLog(`To force load for testing, set localStorage['${forceKey}']='true' and retry.`, 'info');
+                        return;
+                    } else {
+                        get().addLog('Force-loading save despite checksum mismatch (dev override).', 'info');
+                    }
+                }
+            }
+
             let data = parsed.data;
             let version = parsed.version || 0;
 

@@ -13,7 +13,7 @@ import { BattleCell as BattleCellType } from '../../types';
 const _tempObj = new THREE.Object3D();
 const _tempColor = new THREE.Color();
 
-const InstancedVoxelCluster = React.memo(({ data, textureUrl, isShadowRealm }: any) => {
+const InstancedVoxelCluster = React.memo(({ data, textureUrl, isShadowRealm }: { data: BattleCell[], textureUrl: string, isShadowRealm: boolean }) => {
     if (!textureUrl) return null;
     const texture = useTexture(textureUrl);
     const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -82,7 +82,7 @@ const InstancedVoxelCluster = React.memo(({ data, textureUrl, isShadowRealm }: a
     );
 });
 
-export const TerrainLayer = React.memo(({ mapData, isShadowRealm }: any) => {
+export const TerrainLayer = React.memo(({ mapData, isShadowRealm }: { mapData: BattleCell[], isShadowRealm: boolean }) => {
     const grouped = useMemo(() => {
         const g: Record<string, BattleCellType[]> = {};
         if (!mapData) return g;
