@@ -33,7 +33,7 @@ const SpriteComponent = ({ url }: { url: string }) => {
     )
 }
 
-export const BillboardUnit = React.memo(({ position, color, spriteUrl, isCurrentTurn, hp, maxHp, onUnitClick }: any) => {
+export const BillboardUnit = React.memo(({ position, color, spriteUrl, isCurrentTurn, hp, maxHp, onUnitClick }: { position: [number, number, number], color: string, spriteUrl?: string, isCurrentTurn: boolean, hp: number, maxHp: number, onUnitClick: (x: number, z: number) => void }) => {
   const safeMaxHp = maxHp || 1; 
   const hpPercent = Math.max(0, Math.min(1, hp / safeMaxHp));
   const groupRef = useRef<THREE.Group>(null);
@@ -46,7 +46,7 @@ export const BillboardUnit = React.memo(({ position, color, spriteUrl, isCurrent
       }
   });
 
-  const handleClick = (e: any) => {
+  const handleClick = (e: THREE.Event) => {
       e.stopPropagation();
       onUnitClick(position[0], position[2]); 
   };

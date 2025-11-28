@@ -3,7 +3,7 @@ import React, { useRef, useLayoutEffect } from 'react';
 import * as THREE from 'three';
 import { ThreeElements } from '@react-three/fiber';
 import { useGameStore } from '../../store/gameStore';
-import { BattleCell } from '../../types';
+import { BattleCell, PositionComponent } from '../../types';
 import { BATTLE_MAP_SIZE } from '../../constants';
 
 const _tempObj = new THREE.Object3D();
@@ -29,11 +29,11 @@ const InstancedOverlay = React.memo(({ points, color, mapData, scale = 0.8 }: { 
     return ( <instancedMesh ref={meshRef} args={[undefined, undefined, count]} frustumCulled={false}><circleGeometry args={[0.4, 32]} /><meshBasicMaterial color={color} opacity={0.4} transparent depthWrite={false} side={THREE.DoubleSide} /></instancedMesh> );
 });
 
-export const InteractionLayer = ({ mapData, validMoves, validTargets, onTileClick, onTileHover }: any) => {
+export const InteractionLayer = ({ mapData, validMoves, validTargets, onTileClick, onTileHover }: { mapData: BattleCell[], validMoves: PositionComponent[], validTargets: PositionComponent[], onTileClick: (x: number, z: number) => void, onTileHover: (x: number, z: number) => void }) => {
     if (!mapData || mapData.length === 0) return null;
     const center = BATTLE_MAP_SIZE / 2;
-    const handlePointerMove = (e: any) => { e.stopPropagation(); const x = Math.round(e.point.x); const z = Math.round(e.point.z); if (x >= 0 && x < BATTLE_MAP_SIZE && z >= 0 && z < BATTLE_MAP_SIZE) onTileHover(x, z); };
-    const handleClick = (e: any) => { e.stopPropagation(); const x = Math.round(e.point.x); const z = Math.round(e.point.z); if (x >= 0 && x < BATTLE_MAP_SIZE && z >= 0 && z < BATTLE_MAP_SIZE) onTileClick(x, z); };
+    const handlePointerMove = (e: THREE.Event) => { e.stopPropagation(); const x = Math.round((e as any).point.x); const z = Math.round((e as any).point.z); if (x >= 0 && x < BATTLE_MAP_SIZE && z >= 0 && z < BATTLE_MAP_SIZE) onTileHover(x, z); };
+    const handleClick = (e: THREE.Event) => { e.stopPropagation(); const x = Math.round((e as any).point.x); const z = Math.round((e as any).point.z); if (x >= 0 && x < BATTLE_MAP_SIZE && z >= 0 && z < BATTLE_MAP_SIZE) onTileClick(x, z); };
     return (
         <group>
              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[center - 0.5, 0.5, center - 0.5]} visible={false} onPointerMove={handlePointerMove} onClick={handleClick}><planeGeometry args={[BATTLE_MAP_SIZE, BATTLE_MAP_SIZE]} /><meshBasicMaterial /></mesh>
