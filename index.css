@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: hsl(210, 40%, 55%);
+  --color-secondary: hsl(340, 45%, 60%);
+  --color-accent: hsl(45, 80%, 55%);
+}
+
+body {
+  @apply bg-gray-900 text-gray-100 font-sans;
+}
