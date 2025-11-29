@@ -1,6 +1,6 @@
 
 import React, { useEffect, useMemo, Suspense, useState, useCallback } from 'react';
-import { GameState, PositionComponent, BattleAction, Dimension, TerrainType } from './types';
+import { GameState, PositionComponent, BattleAction, Dimension, TerrainType, Entity, CombatStatsComponent } from './types';
 import { OverworldMap } from './components/OverworldMap';
 import { BattleScene } from './components/BattleScene';
 import { CharacterCreation } from './components/CharacterCreation';
@@ -71,7 +71,12 @@ const App = () => {
       return;
     }
 
-    const newLevelUps: any[] = [];
+    const newLevelUps: Array<{
+    character: Entity;
+    oldStats: CombatStatsComponent;
+    newStats: CombatStatsComponent;
+    id: string;
+  }> = [];
     party.forEach((member, idx) => {
       const prevMember = previousPartyStats?.[idx];
       if (prevMember && member.stats.level > prevMember.level) {

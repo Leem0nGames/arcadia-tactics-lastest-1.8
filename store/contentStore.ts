@@ -1,7 +1,7 @@
 
 import { create } from 'zustand';
 import { ITEMS, BASE_STATS, ASSETS } from '../constants';
-import { Item, CharacterClass, TerrainType } from '../types';
+import { Item, CharacterClass, TerrainType, CombatStatsComponent } from '../types';
 
 interface GameConfig {
     mapScale: number;
@@ -40,7 +40,7 @@ interface ContentState {
     
     updateEncounterTable: (terrain: TerrainType, enemyIds: string[]) => void;
 
-    updateClassStats: (cls: CharacterClass, stats: any) => void;
+    updateClassStats: (cls: CharacterClass, stats: Partial<CombatStatsComponent>) => void;
     updateConfig: (config: Partial<GameConfig>) => void;
     exportData: () => string;
     resetToDefaults: () => void;

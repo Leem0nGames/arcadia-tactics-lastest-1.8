@@ -131,7 +131,7 @@ export const calculateDamage = (attacker: Entity & { stats: CombatStatsComponent
 };
 
 // 3. Enemy Scaling
-export const calculateEnemyStats = (baseDef: any, level: number, difficulty: Difficulty) => {
+export const calculateEnemyStats = (baseDef: { hp: number, ac: number, damage: number }, level: number, difficulty: Difficulty) => {
     const diff = DIFFICULTY_SETTINGS[difficulty];
     
     // HP Scaling: Base + (Level-1) * (HitDieAvg + ConMod) * Multiplier

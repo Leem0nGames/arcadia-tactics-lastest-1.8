@@ -51,7 +51,7 @@ export const findPath = (
     if (!startCell || !endCell) return null;
     if ((TERRAIN_MOVEMENT_COST[endCell.terrain] || 1) >= 99) return null;
 
-    const openSet: { cell: HexCell, f: number, g: number, parent?: any }[] = [];
+    const openSet: { cell: HexCell, f: number, g: number, parent?: { cell: HexCell, f: number, g: number } | null }[] = [];
     const closedSet = new Set<string>();
 
     openSet.push({ cell: startCell, f: 0, g: 0 });
@@ -124,7 +124,7 @@ export const findBattlePath = (start: {x:number, y:number}, end: {x:number, y:nu
     const targetCell = mapIndex.get(`${end.x},${end.y}`);
     if (targetCell?.isObstacle) return null;
 
-    const openSet: { cell: BattleCell, f: number, g: number, parent?: any }[] = [];
+    const openSet: { cell: BattleCell, f: number, g: number, parent?: { cell: BattleCell, f: number, g: number } | null }[] = [];
     const closedSet = new Set<string>();
 
     const startCell = mapIndex.get(`${start.x},${start.y}`);
