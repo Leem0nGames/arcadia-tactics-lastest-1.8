@@ -4,8 +4,6 @@ import { GameState } from '../types';
 
 export const MainMenu: React.FC = () => {
   const loadGame = useGameStore(state => state.loadGame);
-  const initializeWorld = useGameStore(state => state.initializeWorld);
-  const setGameState = useGameStore(state => state.setGameState);
   const [hasSave, setHasSave] = useState(false);
 
   useEffect(() => {
@@ -23,9 +21,9 @@ export const MainMenu: React.FC = () => {
   };
 
   const handleNewGame = () => {
-    // initialize world & go to character creation or overworld
-    initializeWorld();
-    setGameState(GameState.CHARACTER_CREATION);
+    localStorage.removeItem('arcadia_tactics_save_v2');
+    // Go directly to CHARACTER_CREATION without quitToMenu (which empties party)
+    useGameStore.setState({ gameState: GameState.CHARACTER_CREATION });
   };
 
   return (

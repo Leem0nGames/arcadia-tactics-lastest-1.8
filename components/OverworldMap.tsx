@@ -108,7 +108,7 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
   const imgCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const transitionCache = useRef<Map<string, HTMLCanvasElement>>(new Map());
   
-  const [viewport, setViewport] = useState({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight });
+  const viewport = useRef({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight });
   const pan = useRef({ x: 0, y: 0 });
   const targetPan = useRef({ x: 0, y: 0 }); // Target for smooth camera
   
@@ -140,7 +140,7 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
 
       const cells: HexCell[] = [];
       const { x: cx, y: cy } = pan.current;
-      const { w, h } = viewport;
+      const { w, h } = viewport.current;
       
       const margin = 2; 
       const tl = pixelToAxial(cx - w/2 - 100, cy - h/2 - 100);
@@ -168,9 +168,29 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
           }
       }
       return cells;
-  }, [pan.current.x, pan.current.y, viewport, isTown, townMapData, playerPos, dimension, exploredTiles]);
+  }, [isTown, townMapData, playerPos, dimension, exploredTiles]);
 
-  // Filter enemies visible in current view
+    // Debug: log visibleCells length and mount
+    useEffect(() => {
+        try {
+            console.log('[debug] OverworldMap mounted', { isTown, dimension, playerPos });
+        } catch (e) {
+            console.warn('OverworldMap mount log failed', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            // visibleCells may be large; log the length only
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            console.log('[debug] OverworldMap visibleCells count', { count: visibleCells.length });
+        } catch (e) {
+            console.warn('OverworldMap visibleCells log failed', e);
+        }
+    }, [/* eslint-disable-line */ /* @ts-ignore */ visibleCells?.length]);
+
+    // Filter enemies visible in current view
   const visibleEnemies = useMemo(() => {
       if (isTown) return [];
       return activeOverworldEnemies.filter(e => e.dimension === dimension);
@@ -210,7 +230,10 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
     const center = hexToPixel(playerPos.x, playerPos.y);
     pan.current = { x: center.x, y: center.y };
     targetPan.current = { x: center.x, y: center.y };
-    updateViewport();
+    if (containerRef.current) {
+      const { clientWidth, clientHeight } = containerRef.current;
+      viewport.current = { x: pan.current.x - clientWidth / 2, y: pan.current.y - clientHeight / 2, w: clientWidth, h: clientHeight };
+    }
     needsRedraw.current = true;
   }, []); // Run ONCE on mount to set initial position
 
@@ -229,17 +252,16 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
   }, [playerPos.x, playerPos.y]);
 
   useEffect(() => {
-    const handleResize = () => { updateViewport(); needsRedraw.current = true; };
+    const handleResize = () => { 
+      if (containerRef.current) {
+        const { clientWidth, clientHeight } = containerRef.current;
+        viewport.current = { x: pan.current.x - clientWidth / 2, y: pan.current.y - clientHeight / 2, w: clientWidth, h: clientHeight };
+      }
+      needsRedraw.current = true; 
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  const updateViewport = () => {
-      if (containerRef.current) {
-        const { clientWidth, clientHeight } = containerRef.current;
-        setViewport({ x: pan.current.x - clientWidth / 2, y: pan.current.y - clientHeight / 2, w: clientWidth, h: clientHeight });
-      }
-  };
 
   // --- ASSET LOADING ---
   const loadImage = useCallback((src: string): Promise<HTMLImageElement | null> => {
@@ -371,9 +393,9 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
             
             // Manually update SVG ViewBox for smooth syncing
             if (svgRef.current) {
-                const vbX = pan.current.x - viewport.w / 2;
-                const vbY = pan.current.y - viewport.h / 2;
-                svgRef.current.setAttribute('viewBox', `${vbX} ${vbY} ${viewport.w} ${viewport.h}`);
+                const vbX = pan.current.x - viewport.current.w / 2;
+                const vbY = pan.current.y - viewport.current.h / 2;
+                svgRef.current.setAttribute('viewBox', `${vbX} ${vbY} ${viewport.current.w} ${viewport.current.h}`);
             }
         }
 
@@ -381,18 +403,18 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
         needsRedraw.current = false;
 
         const dpr = window.devicePixelRatio || 1;
-        if (canvas.width !== viewport.w * dpr || canvas.height !== viewport.h * dpr) {
-            canvas.width = viewport.w * dpr; canvas.height = viewport.h * dpr;
-            canvas.style.width = `${viewport.w}px`; canvas.style.height = `${viewport.h}px`;
+        if (canvas.width !== viewport.current.w * dpr || canvas.height !== viewport.current.h * dpr) {
+            canvas.width = viewport.current.w * dpr; canvas.height = viewport.current.h * dpr;
+            canvas.style.width = `${viewport.current.w}px`; canvas.style.height = `${viewport.current.h}px`;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
 
         // Clear Background
         ctx.fillStyle = isUpsideDown ? '#0a0010' : '#020617';
-        ctx.fillRect(0, 0, viewport.w, viewport.h);
+        ctx.fillRect(0, 0, viewport.current.w, viewport.current.h);
 
-        const offsetX = (pan.current.x - viewport.w / 2);
-        const offsetY = (pan.current.y - viewport.h / 2);
+        const offsetX = (pan.current.x - viewport.current.w / 2);
+        const offsetY = (pan.current.y - viewport.current.h / 2);
         
         const imgSize = Math.ceil(HEX_SIZE * 2.2);
         const halfSize = imgSize / 2;
@@ -402,7 +424,7 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
             const screenX = x - offsetX;
             const screenY = y - offsetY;
 
-            if (screenX < -imgSize || screenX > viewport.w + imgSize || screenY < -imgSize || screenY > viewport.h + imgSize) return;
+            if (screenX < -imgSize || screenX > viewport.current.w + imgSize || screenY < -imgSize || screenY > viewport.current.h + imgSize) return;
 
             ctx.save();
             ctx.translate(screenX, screenY);
@@ -543,7 +565,7 @@ export const OverworldMap: React.FC<OverworldMapProps> = ({ mapData: townMapData
         )}
 
         <canvas ref={canvasRef} className="absolute inset-0 block pointer-events-none" />
-        <svg ref={svgRef} className="absolute inset-0 pointer-events-none z-10" width="100%" height="100%" viewBox={`${pan.current.x - viewport.w / 2} ${pan.current.y - viewport.h / 2} ${viewport.w} ${viewport.h}`} preserveAspectRatio="xMidYMid slice">
+        <svg ref={svgRef} className="absolute inset-0 pointer-events-none z-10" width="100%" height="100%" viewBox={`${pan.current.x - (viewport.current?.w || window.innerWidth) / 2} ${pan.current.y - (viewport.current?.h || window.innerHeight) / 2} ${viewport.current?.w || window.innerWidth} ${viewport.current?.h || window.innerHeight}`} preserveAspectRatio="xMidYMid slice">
              <defs>
                  <radialGradient id="portalGlow">
                     <stop offset="0%" stopColor="#a855f7" stopOpacity="0.8" />

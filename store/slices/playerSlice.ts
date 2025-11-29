@@ -58,7 +58,8 @@ export const createPlayerSlice: StateCreator<GameStore, [], [], PlayerSlice> = (
   party: [],
 
   createCharacter: (name, race, cls, stats, difficulty) => {
-    sfx.playVictory();
+        console.log('[debug] createCharacter start', { name, race, cls, stats, difficulty });
+        try { sfx.playVictory(); } catch(e) { console.warn('sfx.playVictory failed', e); }
     const maxHp = calculateHp(1, stats.CON, getHitDie(cls));
     const maxStamina = calculateMaxStamina(stats.CON, 1);
     const startSlots = getCasterSlots(cls, 1);
@@ -109,7 +110,7 @@ export const createPlayerSlice: StateCreator<GameStore, [], [], PlayerSlice> = (
     ];
 
     // ATOMIC UPDATE to prevent inconsistent render states
-    set({ 
+        set({ 
         party, 
         difficulty, 
         inventory, 
@@ -117,7 +118,7 @@ export const createPlayerSlice: StateCreator<GameStore, [], [], PlayerSlice> = (
         activeInventoryCharacterId: leader.id, 
         exploredTiles: { ...get().exploredTiles, [Dimension.NORMAL]: exploredNormal },
         quests: startQuests,
-        gameState: GameState.OVERWORLD 
+        gameState: GameState.OVERWORLD
     });
     
     get().addLog(`The party assembles! ${name} leads ${companions[0].name} and ${companions[1].name}.`, 'narrative');

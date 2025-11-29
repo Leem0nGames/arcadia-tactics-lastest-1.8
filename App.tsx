@@ -179,13 +179,11 @@ const App = () => {
 
   return (
     <div className="w-screen h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans relative">
-      
       {gameState === GameState.CHARACTER_CREATION && (
-          // If no party exists yet, show MainMenu (Continue/New Game). Otherwise show CharacterCreation for rerolls.
-          (party && party.length > 0) ? (
-            <CharacterCreation onComplete={store.createCharacter} />
-          ) : (
+          (party && party.length === 0) ? (
             <MainMenu />
+          ) : (
+            <CharacterCreation onComplete={store.createCharacter} />
           )
       )}
 
